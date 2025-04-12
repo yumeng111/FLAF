@@ -147,6 +147,7 @@ if __name__ == "__main__":
     snapshotOptions.fCompressionLevel = args.compressionLevel
     unc_cfg_dict = {}
 
+    print(f"Trying to load uncConfig from: {args.uncConfig}")
     with open(args.uncConfig, 'r') as f:
         unc_cfg_dict = yaml.safe_load(f)
 
