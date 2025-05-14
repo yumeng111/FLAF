@@ -437,13 +437,18 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
             remote_in = self.input()
         with remote_in.localize("r") as local_input:
             infile = local_input.path
-            print("Loading fname", infile)
+            print("Loading fname", infile)      
             for ch in channels:
                 for cat in categories:
                     rel_path = os.path.join(self.version, self.period, "plots", var, cat, f"HHbbtautau_{ch}_{var}_StackPlot.pdf")
                     with self.remote_target(rel_path, fs=self.fs_plots).localize("w") as local_pdf:
                         out_pdf = local_pdf.path
-                        want_data = (ch in ["eE", "eMu", "muMu"] or (ch in ["eTau", "muTau", "tauTau"] and cat == "inclusive"))
+                        want_data = (
+                            var != "MT2"
+                            and (
+                                ch in ["eE", "eMu", "muMu"] or (ch in ["eTau", "muTau", "tauTau"] and cat == "inclusive")
+                            )
+                        )
                         cmd = [
                             "python3", plotter,
                             "--inFile",      infile,
@@ -455,22 +460,24 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
                             "--category",    cat,
                             "--channel",     ch,
                             "--year",        era,
-                            "--analysis",    "HH_bbtautau",
                         ]
                         if want_data:
                             cmd.append("--wantData")
                         plot_wantSignals = customisation_dict['plot_wantSignals'].lower() == 'true' if 'plot_wantSignals' in customisation_dict else self.global_params.get('plot_wantSignals', False)
                         plot_wantQCD = customisation_dict['plot_wantQCD'].lower() == 'true' if 'plot_wantQCD' in customisation_dict else self.global_params.get('plot_wantQCD', False)
                         plot_rebin = customisation_dict['plot_rebin'].lower() == 'true' if 'plot_rebin' in customisation_dict else self.global_params.get('plot_rebin', False)
+                        plot_analysis = customisation_dict['plot_analysis'] if 'plot_analysis' in customisation_dict else self.global_params.get('plot_analysis', "")
                         if plot_wantSignals:
                             cmd += ["--wantSignals"]
                         if plot_wantQCD:
                             cmd += ["--wantQCD", "true"]
                         if plot_rebin:
                             cmd += ["--rebin", "true"]
+                        cmd += ["--analysis", plot_analysis]
                         ps_call(cmd, verbose=1)
-            with self.output().localize("w") as flag_file:
-                flag_file.write("done\n")
+            with self.output().localize("w") as local_flag_file:
+                with local_flag_file.open("w") as f:
+                    f.write("done\n")
 
 class AnalysisCacheTask(Task, HTCondorWorkflow, law.LocalWorkflow):
     max_runtime = copy_param(HTCondorWorkflow.max_runtime, 30.0)
