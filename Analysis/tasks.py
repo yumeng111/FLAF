@@ -410,13 +410,12 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
     def output(self):
         var  = self.branch_data
         flag_file= os.path.join(self.version, self.period, "plots", var, ".done")
-        return self.remote_target(flag_file, fs=self.fs_default)
+        return self.remote_target(flag_file, fs=self.fs_plots)
     
     def run(self):
         var   = self.branch_data                   
         era   = self.period                        
-        ver   = self.version                      
-        hist_path = self.fs_histograms.base
+        ver   = self.version
         customisation_dict = getCustomisationSplit(self.customisations)
         
         channels = customisation_dict['channels'] if 'channels' in customisation_dict else self.global_params['channelSelection']
@@ -429,44 +428,42 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
         if isinstance(categories, str):
             categories = categories.split(',')
 
-        plot_unc = customisation_dict['plot_unc'] == 'True' if 'plot_unc' in customisation_dict.keys() else self.global_params.get('plot_unc', True)
-        if plot_unc:
-            infile = os.path.join(hist_path, ver, era, "merged", var, "tmp", f"all_histograms_{var}_hadded.root")
-        else:
-            infile = os.path.join(hist_path, ver, era, "merged", var, f"{var}.root")
-        print("Loading fname", infile)
-        
         plotter = os.path.join(self.ana_path(), "FLAF", "Analysis", "HistPlotter.py")
 
-        for ch in channels:
-            for cat in categories:
-                out_dir = os.path.join(os.path.dirname(self.output().path), cat)
-                os.makedirs(out_dir, exist_ok=True)
-                out_pdf  = os.path.join(out_dir, f"HHbbtautau_{ch}_{var}_StackPlot.pdf")
-
-                want_data = (ch in ["eE", "eMu", "muMu"] or (ch in ["eTau", "muTau", "tauTau"] and cat == "inclusive"))
-
-                cmd = [
-                    "python3", plotter,
-                    "--inFile",      infile,
-                    "--outFile",     out_pdf,
-                    "--bckgConfig",  os.path.join(self.ana_path(), self.global_params["analysis_config_area"], "background_samples.yaml"),
-                    "--globalConfig",os.path.join(self.ana_path(), self.global_params["analysis_config_area"], "global.yaml"),
-                    "--sigConfig",   os.path.join(self.ana_path(), self.global_params["analysis_config_area"], era, "samples.yaml"),
-                    "--var",         var,
-                    "--category",    cat,
-                    "--channel",     ch,
-                    "--year",        era,
-                    "--analysis",    "HH_bbtautau",
-                ]
-                if want_data:
-                    cmd.append("--wantData")
-                if str(customisation_dict.get("plot_with_signals", True)) == "True":
-                    cmd += ["--wantSignals"]
-                ps_call(cmd, verbose=1)
-
-        with self.output().localize("w") as flag:
-            flag.write("done\n")
+        plot_unc = customisation_dict['plot_unc'] == 'True' if 'plot_unc' in customisation_dict.keys() else self.global_params.get('plot_unc', True)
+        if plot_unc:
+            remote_in = self.remote_target(os.path.join(ver, era, "merged", var, "tmp", f"all_histograms_{var}_hadded.root"),fs=self.fs_histograms,)
+        else:
+            remote_in = self.input()
+        with remote_in.localize("r") as local_input:
+            infile = local_input.path
+            print("Loading fname", infile)
+            for ch in channels:
+                for cat in categories:
+                    rel_path = os.path.join(self.version, self.period, "plots", var, cat, f"HHbbtautau_{ch}_{var}_StackPlot.pdf")
+                    with self.remote_target(rel_path, fs=self.fs_plots).localize("w") as local_pdf:
+                        out_pdf = local_pdf.path
+                        want_data = (ch in ["eE", "eMu", "muMu"] or (ch in ["eTau", "muTau", "tauTau"] and cat == "inclusive"))
+                        cmd = [
+                            "python3", plotter,
+                            "--inFile",      infile,
+                            "--outFile",     out_pdf,
+                            "--bckgConfig",  os.path.join(self.ana_path(), self.global_params["analysis_config_area"], "background_samples.yaml"),
+                            "--globalConfig",os.path.join(self.ana_path(), self.global_params["analysis_config_area"], "global.yaml"),
+                            "--sigConfig",   os.path.join(self.ana_path(), self.global_params["analysis_config_area"], era, "samples.yaml"),
+                            "--var",         var,
+                            "--category",    cat,
+                            "--channel",     ch,
+                            "--year",        era,
+                            "--analysis",    "HH_bbtautau",
+                        ]
+                        if want_data:
+                            cmd.append("--wantData")
+                        if str(customisation_dict.get("plot_with_signals", True)) == "True":
+                            cmd += ["--wantSignals"]
+                        ps_call(cmd, verbose=1)
+            with self.output().localize("w") as flag_file:
+                flag_file.write("done\n")
 
 class AnalysisCacheTask(Task, HTCondorWorkflow, law.LocalWorkflow):
     max_runtime = copy_param(HTCondorWorkflow.max_runtime, 30.0)
