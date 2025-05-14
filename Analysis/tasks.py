@@ -434,6 +434,7 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
             infile = os.path.join(hist_path, ver, era, "merged", var, "tmp", f"all_histograms_{var}_hadded.root")
         else:
             infile = os.path.join(hist_path, ver, era, "merged", var, f"{var}.root")
+        print("Loading fname", infile)
         
         plotter = os.path.join(self.ana_path(), "FLAF", "Analysis", "HistPlotter.py")
 
