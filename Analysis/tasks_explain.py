@@ -458,7 +458,7 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
         #flag: let Law can mark the branch DONE without uploading dozens of PDFs.  All real outputs are produced by plotter.py and land next to this flag file.
         var  = self.branch_data
         flag_file= os.path.join(self.version, self.period, "plots", var, ".done")
-        return self.remote_target(flag_file, fs=self.fs_default)
+        return self.remote_target(flag_file, fs=self.fs_plots)
     
     def run(self):
         var   = self.branch_data                   
@@ -509,8 +509,17 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
                         ]
                         if want_data:
                             cmd.append("--wantData")
-                        if str(customisation_dict.get("plot_with_signals", True)) == "True":
+                        plot_wantSignals = customisation_dict['plot_wantSignals'].lower() == 'true' if 'plot_wantSignals' in customisation_dict else self.global_params.get('plot_wantSignals', False)
+                        plot_wantQCD = customisation_dict['plot_wantQCD'].lower() == 'true' if 'plot_wantQCD' in customisation_dict else self.global_params.get('plot_wantQCD', False)
+                        plot_rebin = customisation_dict['plot_rebin'].lower() == 'true' if 'plot_rebin' in customisation_dict else self.global_params.get('plot_rebin', False)
+                        # Different argument definition: eg For wantQCD or rebin, enable rebinning with --rebin True; disable by omitting the argument (not with --rebin False).
+                        # can redefine the default value in "--customisations plot_wantSignals=true"
+                        if plot_wantSignals:
                             cmd += ["--wantSignals"]
+                        if plot_wantQCD:
+                            cmd += ["--wantQCD", "true"]
+                        if plot_rebin:
+                            cmd += ["--rebin", "true"]
                         ps_call(cmd, verbose=1)
             with self.output().localize("w") as flag_file:
                 flag_file.write("done\n")

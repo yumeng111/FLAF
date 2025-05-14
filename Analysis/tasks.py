@@ -459,8 +459,15 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
                         ]
                         if want_data:
                             cmd.append("--wantData")
-                        if str(customisation_dict.get("plot_with_signals", True)) == "True":
+                        plot_wantSignals = customisation_dict['plot_wantSignals'].lower() == 'true' if 'plot_wantSignals' in customisation_dict else self.global_params.get('plot_wantSignals', False)
+                        plot_wantQCD = customisation_dict['plot_wantQCD'].lower() == 'true' if 'plot_wantQCD' in customisation_dict else self.global_params.get('plot_wantQCD', False)
+                        plot_rebin = customisation_dict['plot_rebin'].lower() == 'true' if 'plot_rebin' in customisation_dict else self.global_params.get('plot_rebin', False)
+                        if plot_wantSignals:
                             cmd += ["--wantSignals"]
+                        if plot_wantQCD:
+                            cmd += ["--wantQCD", "true"]
+                        if plot_rebin:
+                            cmd += ["--rebin", "true"]
                         ps_call(cmd, verbose=1)
             with self.output().localize("w") as flag_file:
                 flag_file.write("done\n")
