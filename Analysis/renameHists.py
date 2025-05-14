@@ -154,7 +154,8 @@ if type(samples_to_consider) == list:
 all_histnames = {}
 
 #Move this rename map to the weights.yaml for Run3, but keep previous Run2 support for now
-if int(args.year) < 2020:
+if int(''.join(filter(str.isdigit, args.year)))<2020:
+#if int(args.year) < 2020:
     for process in processes:
         all_histnames[process] = process
         for unc_old in uncReNames.keys():
@@ -164,7 +165,8 @@ if int(args.year) < 2020:
             for scale in ['Up','Down']:
                 all_histnames[f"{process}_{unc_old}_{args.year}_{scale}"] = f"{process}_{new_unc}{scale}"
                 all_histnames[f"{process}_{unc_old}_{scale}"] = f"{process}_{new_unc}{scale}"
-elif int(args.year) >= 2020:
+elif int(''.join(filter(str.isdigit, args.year)))>=2020:
+#elif int(args.year) >= 2020:
     for process in samples_to_consider:
         all_histnames[process] = process
         for unc_old in setup.weights_config['norm'].keys():

@@ -383,89 +383,9 @@ class MergeTask(Task, HTCondorWorkflow, law.LocalWorkflow):
                 RenameHistsProducer_cmd = ['python3', RenameHistsProducer,'--inFile', tmpFile.path, '--outFile', outFile.path, '--var', var, '--year', getYear(self.period), '--ana_path', self.ana_path(), '--period', self.period]
                 ps_call(RenameHistsProducer_cmd,verbose=1)
 
-class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
-    max_runtime = copy_param(HTCondorWorkflow.max_runtime, 2.0)
-    n_cpus      = copy_param(HTCondorWorkflow.n_cpus, 1)
 
-    def workflow_requires(self):        
-        merge_map = MergeTask.req(self, branch=-1, branches=(), customisations=self.customisations).create_branch_map()
-        return {"merge": MergeTask.req(self,branches=tuple(merge_map.keys()),customisations=self.customisations,)}
-    
-    def create_branch_map(self):
-        branches = {}
-        merge_map = MergeTask.req(self, branch=-1, branches=(), customisations=self.customisations).create_branch_map()
 
-        for k, (_, (var, _)) in enumerate(merge_map.items()):
-            branches[k] = var
-        return branches
 
-    def requires(self):
-        var = self.branch_data
-
-        merge_map = MergeTask.req(self, branch=-1, branches=(), customisations=self.customisations).create_branch_map()
-        merge_branch = next(br for br, (v, _) in merge_map.items() if v == var)
-
-        return MergeTask.req(self,branch=merge_branch,customisations=self.customisations,max_runtime=MergeTask.max_runtime._default,)
-
-    def output(self):
-        var  = self.branch_data
-        flag_file= os.path.join(self.version, self.period, "plots", var, ".done")
-        return self.remote_target(flag_file, fs=self.fs_default)
-    
-    def run(self):
-        var   = self.branch_data                   
-        era   = self.period                        
-        ver   = self.version                      
-        hist_path = self.fs_histograms.base
-        customisation_dict = getCustomisationSplit(self.customisations)
-        
-        channels = customisation_dict['channels'] if 'channels' in customisation_dict else self.global_params['channelSelection']
-        if isinstance(channels, str):
-            channels = channels.split(',')
-        
-        base_cats = self.global_params['categories']
-        boosted_cats = self.global_params['boosted_categories']
-        categories = customisation_dict['categories'] if 'categories' in customisation_dict else base_cats + boosted_cats
-        if isinstance(categories, str):
-            categories = categories.split(',')
-
-        plot_unc = customisation_dict['plot_unc'] == 'True' if 'plot_unc' in customisation_dict.keys() else self.global_params.get('plot_unc', True)
-        if plot_unc:
-            infile = os.path.join(hist_path, ver, era, "merged", var, "tmp", f"all_histograms_{var}_hadded.root")
-        else:
-            infile = os.path.join(hist_path, ver, era, "merged", var, f"{var}.root")
-        
-        plotter = os.path.join(self.ana_path(), "FLAF", "Analysis", "HistPlotter.py")
-
-        for ch in channels:
-            for cat in categories:
-                out_dir = os.path.join(os.path.dirname(self.output().path), cat)
-                os.makedirs(out_dir, exist_ok=True)
-                out_pdf  = os.path.join(out_dir, f"HHbbtautau_{ch}_{var}_StackPlot.pdf")
-
-                want_data = (ch in ["eE", "eMu", "muMu"] or (ch in ["eTau", "muTau", "tauTau"] and cat == "inclusive"))
-
-                cmd = [
-                    "python3", plotter,
-                    "--inFile",      infile,
-                    "--outFile",     out_pdf,
-                    "--bckgConfig",  os.path.join(self.ana_path(), self.global_params["analysis_config_area"], "background_samples.yaml"),
-                    "--globalConfig",os.path.join(self.ana_path(), self.global_params["analysis_config_area"], "global.yaml"),
-                    "--sigConfig",   os.path.join(self.ana_path(), self.global_params["analysis_config_area"], era, "samples.yaml"),
-                    "--var",         var,
-                    "--category",    cat,
-                    "--channel",     ch,
-                    "--year",        era,
-                    "--analysis",    "HH_bbtautau",
-                ]
-                if want_data:
-                    cmd.append("--wantData")
-                if str(customisation_dict.get("plot_with_signals", True)) == "True":
-                    cmd += ["--wantSignals"]
-                ps_call(cmd, verbose=1)
-
-        with self.output().localize("w") as flag:
-            flag.write("done\n")
 
 class AnalysisCacheTask(Task, HTCondorWorkflow, law.LocalWorkflow):
     max_runtime = copy_param(HTCondorWorkflow.max_runtime, 30.0)

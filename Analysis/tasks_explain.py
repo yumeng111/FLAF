@@ -384,30 +384,78 @@ class MergeTask(Task, HTCondorWorkflow, law.LocalWorkflow):
                 ps_call(RenameHistsProducer_cmd,verbose=1)
 
 class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
+    #for each branch
     max_runtime = copy_param(HTCondorWorkflow.max_runtime, 2.0)
     n_cpus      = copy_param(HTCondorWorkflow.n_cpus, 1)
 
-    def workflow_requires(self):        
+    def workflow_requires(self):
+        #Tell Law *full* MergeTask workflow must complete first, otherwise task would start before the ROOT files exist.
+        
         merge_map = MergeTask.req(self, branch=-1, branches=(), customisations=self.customisations).create_branch_map()
-        return {"merge": MergeTask.req(self,branches=tuple(merge_map.keys()),customisations=self.customisations,)}
+        '''
+        histProducerSample_map.items(): gives TASK branches of HistProducerSampleTaskreturns        and returns (key, value) pairs, 
+        each branch representing a key 0/1/2... (sample_name, list of last task HistProducerFileTask branches, variable).
+        histProducerSample_map:
+        {
+        0: ("DYJets",    [0,1,2], "lep1_pt"),
+        1: ("TTbar",     [3,4,5], "lep1_pt"),
+        2: ("RadionM250",[6],     "lep1_pt"),
+        3: ("DYJets",    [7,8],   "b1_pt"),
+        ...
+        }
+
+        merge_map, .keys only returns keys or say branch indices 0,1,2:
+        {
+        0: ("lep1_pt", [0,1,2]),  # var, [0,1,2] list of last task HistProducerSample branch indices
+        1: ("b1_pt", [3,1]),
+        ...
+        }
+        '''
+
+        #reuturns{"merge": [MergeTask(branch=0), MergeTask(branch=1), ...]}, later law run the merge task first
+        return {
+            "merge": MergeTask.req(
+                self,
+                branches=tuple(merge_map.keys()),
+                customisations=self.customisations,
+            )
+        }
     
     def create_branch_map(self):
+        """
+        Create one branch per physics variable (same keys as MergeTask).
+        """
         branches = {}
-        merge_map = MergeTask.req(self, branch=-1, branches=(), customisations=self.customisations).create_branch_map()
+        merge_map = MergeTask.req(
+            self, branch=-1, branches=(), customisations=self.customisations
+        ).create_branch_map()
 
         for k, (_, (var, _)) in enumerate(merge_map.items()):
             branches[k] = var
         return branches
 
     def requires(self):
+        #For the current plotask branch for some var: find its specific MergeTask branch and require just that one (available)
+        
+        '''
+        Extract the variable name assigned to this branch of PlotTask. 
+        branch_data is law built in property, can be string or tuple (self.branch_data == branch_map[i], eg for plottask== "lep1_pt" or for mergetask ==var, list of last task branches). eg for PlotTask branch=0 → self.branch_data = "lep1_pt"
+        '''
         var = self.branch_data
 
         merge_map = MergeTask.req(self, branch=-1, branches=(), customisations=self.customisations).create_branch_map()
+        # find the right MergeTask branch index (br) where the variable v matches the one for plotask (var).        next func stops at the first match.
         merge_branch = next(br for br, (v, _) in merge_map.items() if v == var)
 
-        return MergeTask.req(self,branch=merge_branch,customisations=self.customisations,max_runtime=MergeTask.max_runtime._default,)
+        return MergeTask.req(
+            self,
+            branch=merge_branch,
+            customisations=self.customisations,
+            max_runtime=MergeTask.max_runtime._default,
+        )
 
     def output(self):
+        #flag: let Law can mark the branch DONE without uploading dozens of PDFs.  All real outputs are produced by plotter.py and land next to this flag file.
         var  = self.branch_data
         flag_file= os.path.join(self.version, self.period, "plots", var, ".done")
         return self.remote_target(flag_file, fs=self.fs_default)
