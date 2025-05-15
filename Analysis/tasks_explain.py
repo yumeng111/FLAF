@@ -470,9 +470,10 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
         if isinstance(channels, str):
             channels = channels.split(',')
         
-        base_cats = self.global_params['categories']
-        boosted_cats = self.global_params['boosted_categories']
-        categories = customisation_dict['categories'] if 'categories' in customisation_dict else base_cats + boosted_cats
+        base_cats = self.global_params.get('categories') or []
+        boosted_cats = self.global_params.get('boosted_categories') or []
+        categories = customisation_dict.get('categories', base_cats + boosted_cats)
+        #categories = customisation_dict['categories'] if 'categories' in customisation_dict else base_cats + boosted_cats
         if isinstance(categories, str):
             categories = categories.split(',')
 
