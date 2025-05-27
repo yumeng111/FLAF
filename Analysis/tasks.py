@@ -444,12 +444,6 @@ class PlotTask(Task, HTCondorWorkflow, law.LocalWorkflow):
                     rel_path = os.path.join(self.version, self.period, "plots", var, cat, f"HHbbtautau_{ch}_{var}_StackPlot.pdf")
                     with self.remote_target(rel_path, fs=self.fs_plots).localize("w") as local_pdf:
                         out_pdf = local_pdf.path
-                        want_data = (
-                            var != "MT2"
-                            and (
-                                ch in ["eE", "eMu", "muMu"] or (ch in ["eTau", "muTau", "tauTau"] and cat == "inclusive")
-                            )
-                        )
                         cmd = [
                             "python3", plotter,
                             "--inFile",      infile,
